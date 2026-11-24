@@ -1,0 +1,27 @@
+const DBKEY='northstar_pos_v1';
+const DEFAULT_PERMS=['dashboard','sales','viewSales','inventory','addProducts','editProducts','restock','expenses','customers','reports'];
+const ALL_PERMS=['dashboard','sales','viewSales','editSales','deleteSales','inventory','addProducts','editProducts','deleteProducts','restock','changePrices','expenses','editExpenses','deleteExpenses','customers','manageEmployees','reports','settings'];
+const PERM_LABELS={dashboard:'View dashboard',sales:'Record sales',viewSales:'View sales',editSales:'Edit sales',deleteSales:'Delete sales',inventory:'View inventory',addProducts:'Add products',editProducts:'Edit products',deleteProducts:'Delete products',restock:'Restock inventory',changePrices:'Change product prices',expenses:'Record expenses',editExpenses:'Edit expenses',deleteExpenses:'Delete expenses',customers:'View customers',manageEmployees:'Manage employees',reports:'View reports',settings:'Manage settings'};
+function uid(prefix='ID'){return prefix+'-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase()}
+function nowISO(){return new Date().toISOString()}
+function seedData(){const created=nowISO(),admin={id:uid('EMP'),name:'Administrator',username:'admin',password:'admin123',role:'admin',active:true,permissions:ALL_PERMS};const products=[{id:uid('PRD'),sku:'REM-001',name:'TV Remote',category:'Electronics',cost:2000,price:3500,qty:19,min:5,description:'Universal TV remote',created},{id:uid('PRD'),sku:'CAB-001',name:'USB-C Cable',category:'Accessories',cost:900,price:1800,qty:35,min:8,description:'1 metre cable',created},{id:uid('PRD'),sku:'BUL-001',name:'LED Bulb 12W',category:'Electrical',cost:1200,price:2200,qty:14,min:5,description:'Energy saving bulb',created}];const customer={id:uid('CUS'),name:'Demo Customer',phone:'08000000000',address:'',created};const sale={id:'DEMO-OPENING-001',customerId:customer.id,customer:customer.name,phone:customer.phone,items:[{productId:products[0].id,name:products[0].name,sku:products[0].sku,qty:1,price:3500,cost:2000}],subtotal:3500,discount:0,total:3500,paid:3500,method:'Cash',employee:'Administrator',date:created,status:'completed',demo:true};return {products,purchases:[],sales:[sale],customers:[customer],employees:[admin],expenses:[],logs:[{id:uid('LOG'),employee:'System',action:'Demo data loaded',description:'A sample sale and starter products were added for testing. Remove/reset demo data before real use.',date:created}],settings:{business:'Northstar Business',currency:'NGN',lowStock:5},user:null}}
+function loadDB(){
+ const makeFresh=()=>{const fresh=seedData();fresh.employees=fresh.employees.filter(e=>e.username!=='admin');fresh.employees.unshift({id:uid('EMP'),name:'Administrator',username:'admin',password:'admin123',role:'admin',active:true,permissions:ALL_PERMS});localStorage.setItem(DBKEY,JSON.stringify(fresh));return fresh};
+ try{
+  const raw=localStorage.getItem(DBKEY);if(!raw)return makeFresh();
+  const d=JSON.parse(raw);if(!d||typeof d!=='object')return makeFresh();
+  for(const k of ['products','purchases','sales','customers','employees','expenses','logs'])if(!Array.isArray(d[k]))d[k]=[];
+  d.settings=d.settings||{business:'Northstar Business',currency:'NGN',lowStock:5};
+  let admin=d.employees.find(e=>e.role==='admin'||String(e.username||'').toLowerCase()==='admin');
+  if(!admin){admin={id:uid('EMP'),name:'Administrator',username:'admin',password:'admin123',role:'admin',active:true,permissions:ALL_PERMS};d.employees.unshift(admin)}
+  else{admin.role='admin';admin.active=true;admin.permissions=ALL_PERMS;if(!admin.username)admin.username='admin';if(!admin.password)admin.password='admin123';if(!admin.name)admin.name='Administrator'}
+  // Remove duplicate seeded admin accounts without changing other employee records.
+  d.employees=d.employees.filter(e=>e===admin&&(e.role==='admin'||String(e.username||'').toLowerCase()==='admin') || (e!==admin&&e.role!=='admin'&&String(e.username||'').toLowerCase()!=='admin'));
+  localStorage.setItem(DBKEY,JSON.stringify(d));return d;
+ }catch(e){return makeFresh()}
+}
+let db=loadDB();function saveDB(next=db){db=next;localStorage.setItem(DBKEY,JSON.stringify(db));return db}
+function logActivity(action,description){db.logs.unshift({id:uid('LOG'),employee:currentUser?.name||'System',action,description,date:nowISO()});db.logs=db.logs.slice(0,1000);saveDB()}
+function money(n){return '₦'+Number(n||0).toLocaleString('en-NG',{maximumFractionDigits:2})}function dateFmt(v){return v?new Date(v).toLocaleString('en-NG',{dateStyle:'medium',timeStyle:'short'}):'—'}function dayKey(v){return new Date(v).toISOString().slice(0,10)}
+function getCustomer(name,phone=''){let c=db.customers.find(x=>x.phone&&x.phone===phone)||db.customers.find(x=>x.name.toLowerCase()===name.toLowerCase());if(!c){c={id:uid('CUS'),name,phone,address:'',created:nowISO()};db.customers.push(c)}return c}
+function saleTotals(){return db.sales.filter(s=>s.status!=='cancelled').reduce((a,s)=>a+s.total,0)}function receivedTotals(){return db.sales.filter(s=>s.status!=='cancelled').reduce((a,s)=>a+s.paid,0)}function expenseTotals(){return db.expenses.filter(e=>e.status!=='void').reduce((a,e)=>a+e.amount,0)}function purchaseTotals(){return db.purchases.reduce((a,p)=>a+p.total,0)}function profitTotal(){return db.sales.filter(s=>s.status!=='cancelled').reduce((a,s)=>a+s.items.reduce((v,i)=>v+(i.price-i.cost)*i.qty,0),0)-expenseTotals()}

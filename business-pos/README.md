@@ -1,0 +1,1 @@
+A lightweight Point of Sale (POS) and inventory management web app for tracking daily sales, stock levels, customer records, supplier purchases, and business expenses. Built with vanilla HTML, CSS, and JavaScript featuring role-based access control, financial reports, and JSON backup/restore.
